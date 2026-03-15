@@ -1,0 +1,10 @@
+.venv
+.venv311
+__pycache__
+.git
+.env
+*.ipynb
+.DS_Store
+deploy_to_colab.py
+deploy_to_hf.sh
+.huggingfaceignore

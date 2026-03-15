@@ -21,6 +21,7 @@ pinned: false
 Key characteristics:
 - **Realistic question count** — the number of questions is derived from the job description, not hard-coded.
 - **Multi-provider LLM support** — switch between Groq (free), OpenAI, Anthropic Claude, or Google Gemini from the UI without touching code.
+- **Voice-enabled interview flow** — speak answers via microphone transcription and hear interviewer responses read aloud.
 - **Free default** — the default provider is Groq (Llama 3.3-70B), which requires no credit card.
 - **Free cloud hosting** — one-command push to HuggingFace Spaces for a permanent public URL.
 
@@ -44,6 +45,8 @@ Once the interview starts the setup panel collapses and a full-screen chat inter
 - The AI interviewer greets you and asks the first question.
 - You type your answer in the chat input and press Enter (or click Send).
 - After each answer the AI returns **structured feedback**: what you did well, what to improve, and a score out of 10.
+- You can **record your answer** and transcribe it to text (currently supported for Groq/OpenAI providers).
+- The interviewer response is also available as **audio playback** after each AI message.
 - A small **progress indicator** shows `Question X of Y` so you always know where you are.
 - After the final question the AI produces a **summary report**: overall score, hire / no-hire recommendation, top strengths, and key development areas.
 
@@ -88,13 +91,12 @@ cp .env.example .env
 ### 4. Run the app
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 - **Local URL**: http://127.0.0.1:7860
-- **Public URL** (via Gradio share): printed in the terminal as `Running on public URL: https://xxxx.gradio.live`
 
-> The public Gradio URL works for **72 hours** — great for quick sharing or testing without any deployment.
+> To share a temporary public URL, set `share=True` in `demo.launch()` in `app.py`. The link is valid for **72 hours**.
 
 ---
 
@@ -176,4 +178,4 @@ interview-agent/
 | **"Failed to analyse job description"** | Check your API key is correct and has remaining quota |
 | **Groq rate limit hit** | Groq free tier is generous, but if you hit it wait ~60 s or switch to Gemini |
 | **HF Space not starting** | Open the **Logs** tab on the Space page — usually a missing or mis-spelled requirement |
-| **Public Gradio URL expired** | Run `python app.py` again — a new 72-hour URL is printed each time |
+| **`NotOpenSSLWarning` on startup** | Harmless warning on macOS with LibreSSL — the app runs fine, ignore it |

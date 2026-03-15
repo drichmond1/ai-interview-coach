@@ -52,8 +52,8 @@ def generate_question_prompt(
     jd: str,
     role_info: dict,
     question_number: int,
-    total_questions: int,
     conversation_history: list[dict],
+    difficulty: str = "medium",
 ) -> str:
     """
     Return a prompt that asks the LLM to generate the next interview question.
@@ -62,14 +62,16 @@ def generate_question_prompt(
         jd: The full job description text.
         role_info: Parsed role metadata from analyze_jd_prompt (role_title, seniority, etc.).
         question_number: 1-based index of the question about to be asked.
-        total_questions: Total questions planned for this interview.
         conversation_history: List of {role, content} dicts representing prior exchanges.
+        difficulty: One of 'easy', 'medium', 'hard'.
     """
     breakdown = role_info.get("question_breakdown", {})
     intro_count = breakdown.get("intro", 1)
     technical_count = breakdown.get("technical", 0)
+    behavioral_count = breakdown.get("behavioral", 0)
     intro_end = intro_count
     technical_end = intro_count + technical_count
+    planned_total = intro_count + technical_count + behavioral_count
 
     if question_number <= intro_end:
         phase = "introductory/warm-up"
@@ -77,24 +79,25 @@ def generate_question_prompt(
             "Ask a friendly opening question such as a brief self-introduction or "
             "background summary. Keep it welcoming and low-pressure."
         )
-    elif question_number == total_questions:
-        phase = "closing"
-        phase_guidance = (
-            "This is the final question. Ask the candidate if they have any questions "
-            "for the interviewing team or about the role. This is a standard closing question."
-        )
     elif question_number <= technical_end:
         phase = "core technical"
         phase_guidance = (
             "Ask a substantive technical question directly relevant to the role's key skills "
             "and the job description. Vary depth and topic from previous questions."
         )
-    else:
+    elif question_number <= planned_total:
         phase = "behavioral"
         phase_guidance = (
             "Ask a behavioral question using a situational framing (e.g., 'Tell me about a "
             "time when…' or 'How have you handled…'). Focus on teamwork, communication, "
             "or problem-solving as relevant to the role."
+        )
+    else:
+        phase = "extended"
+        phase_guidance = (
+            "Continue the interview with a mix of technical and behavioral questions. "
+            "Vary the topic and depth from previous questions. Draw on the job description "
+            "for relevant areas not yet covered."
         )
 
     history_text = ""
@@ -105,11 +108,31 @@ def generate_question_prompt(
             lines.append(f"{label}: {turn['content']}")
         history_text = "\n\nConversation so far:\n" + "\n\n".join(lines)
 
+    difficulty_guidance = {
+        "easy": (
+            "Difficulty: Easy — Ask straightforward, foundational questions. "
+            "Focus on basic concepts, definitions, and simple scenarios. "
+            "Avoid multi-part questions or deep system design."
+        ),
+        "medium": (
+            "Difficulty: Medium — Ask moderately challenging questions that test "
+            "practical experience and solid understanding. Include some follow-up "
+            "depth but keep questions focused."
+        ),
+        "hard": (
+            "Difficulty: Hard — Ask challenging, in-depth questions that test expert-level "
+            "knowledge. Include complex scenarios, system design trade-offs, edge cases, "
+            "and multi-layered problems. Expect detailed, nuanced answers."
+        ),
+    }
+    diff_text = difficulty_guidance.get(difficulty, difficulty_guidance["medium"])
+
     return (
         f"You are interviewing a candidate for the role: {role_info.get('role_title', 'the position')} "
         f"({role_info.get('seniority', 'unknown')} level, {role_info.get('domain', 'technical')}).\n\n"
-        f"This is question {question_number} of {total_questions}. "
+        f"This is question {question_number}. "
         f"Phase: {phase}.\n"
+        f"{diff_text}\n"
         f"Guidance: {phase_guidance}\n\n"
         f"Job Description:\n{jd}"
         f"{history_text}\n\n"
@@ -121,11 +144,68 @@ def generate_question_prompt(
     )
 
 
+def classify_response_prompt(
+    question: str,
+    candidate_response: str,
+) -> str:
+    """
+    Return a prompt that asks the LLM to classify whether the candidate's
+    response is a clarifying question or an actual answer.
+    """
+    return (
+        "You are classifying a candidate's response during a technical interview.\n\n"
+        f"Interview question: {question}\n\n"
+        f"Candidate's response: {candidate_response}\n\n"
+        "Is the candidate asking a clarifying question about the interview question, "
+        "or are they providing their actual answer?\n\n"
+        "Rules:\n"
+        "- If the response is asking for more information, clarification, or context "
+        "about the question, classify it as CLARIFYING.\n"
+        "- If the response is attempting to answer the question (even partially or "
+        "poorly), classify it as ANSWER.\n"
+        "- Respond with ONLY one word: either CLARIFYING or ANSWER. Nothing else."
+    )
+
+
+def clarifying_question_prompt(
+    question: str,
+    clarifying_question: str,
+    conversation_history: list[dict],
+) -> str:
+    """
+    Return a prompt for the interviewer to respond to a candidate's clarifying question.
+
+    The interviewer should answer helpfully without giving away the answer.
+    """
+    history_text = ""
+    if conversation_history:
+        lines = []
+        for turn in conversation_history:
+            label = "Interviewer" if turn["role"] == "assistant" else "Candidate"
+            lines.append(f"{label}: {turn['content']}")
+        history_text = "\n\nConversation so far:\n" + "\n\n".join(lines)
+
+    return (
+        "You are a professional technical interviewer. The candidate has asked a "
+        "clarifying question about your most recent interview question.\n\n"
+        f"Your interview question was: {question}\n\n"
+        f"Candidate's clarifying question: {clarifying_question}\n"
+        f"{history_text}\n\n"
+        "Instructions:\n"
+        "- Answer the clarifying question helpfully and concisely.\n"
+        "- Provide enough context for the candidate to answer well, but do NOT "
+        "give away the answer itself.\n"
+        "- Stay in character as the interviewer.\n"
+        "- Output ONLY your response. No labels or preamble."
+    )
+
+
 def generate_feedback_prompt(
     question: str,
     answer: str,
     question_number: int,
-    total_questions: int,
+    resume: str = "",
+    difficulty: str = "medium",
 ) -> str:
     """
     Return a prompt asking the LLM to evaluate a candidate's answer.
@@ -134,13 +214,29 @@ def generate_feedback_prompt(
         question: The interview question that was asked.
         answer: The candidate's response.
         question_number: 1-based position of this question.
-        total_questions: Total questions in the interview.
+        resume: Optional candidate resume text for context.
+        difficulty: Interview difficulty level ('easy', 'medium', 'hard').
     """
+    resume_section = ""
+    if resume.strip():
+        resume_section = (
+            f"\n\nCandidate's Resume (use this for additional context when evaluating):\n{resume}\n"
+        )
+
+    difficulty_expectation = {
+        "easy": "The interview is set to Easy difficulty — evaluate leniently, focusing on whether core concepts are understood.",
+        "medium": "The interview is set to Medium difficulty — expect solid practical knowledge and clear explanations.",
+        "hard": "The interview is set to Hard difficulty — expect expert-level depth, nuance, and thorough coverage of edge cases.",
+    }
+    diff_text = difficulty_expectation.get(difficulty, difficulty_expectation["medium"])
+
     return (
-        f"You are evaluating a candidate's answer to question {question_number} of {total_questions} "
+        f"You are evaluating a candidate's answer to question {question_number} "
         "in a technical interview.\n\n"
+        f"{diff_text}\n\n"
         f"Question: {question}\n\n"
-        f"Candidate's Answer: {answer}\n\n"
+        f"Candidate's Answer: {answer}\n"
+        f"{resume_section}\n"
         "Provide concise, specific feedback on this answer. "
         "Keep the total response to 3–6 sentences across all sections. "
         "Be constructive and concrete — reference what the candidate actually said.\n\n"
@@ -167,6 +263,7 @@ def generate_summary_prompt(
     jd: str,
     role_info: dict,
     qa_pairs: list[dict],
+    resume: str = "",
 ) -> str:
     """
     Return a prompt for generating a final interview summary report.
@@ -175,6 +272,7 @@ def generate_summary_prompt(
         jd: The full job description text.
         role_info: Parsed role metadata (role_title, seniority, domain, key_skills, etc.).
         qa_pairs: List of dicts with keys: question, answer, feedback, score.
+        resume: Optional candidate resume text for context.
     """
     qa_text_lines = []
     for i, qa in enumerate(qa_pairs, start=1):
@@ -190,10 +288,15 @@ def generate_summary_prompt(
     seniority = role_info.get("seniority", "")
     domain = role_info.get("domain", "")
 
+    resume_section = ""
+    if resume.strip():
+        resume_section = f"\nCandidate's Resume:\n{resume}\n"
+
     return (
         f"You have just completed a mock interview for the role: {role_title} "
         f"({seniority}, {domain}).\n\n"
-        f"Job Description:\n{jd}\n\n"
+        f"Job Description:\n{jd}\n"
+        f"{resume_section}\n"
         f"Interview Q&A with per-question feedback and scores:\n\n{qa_text}\n\n"
         "Generate a final interview summary report. "
         "Compute the Overall Score as the average of the per-question scores, rounded to one decimal place. "

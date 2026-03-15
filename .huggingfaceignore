@@ -1,0 +1,27 @@
+# Ignored by HuggingFace upload (like .gitignore for HF Spaces)
+
+# Environment secrets — never upload
+.env
+*.env
+
+# Python virtual environment — large, not needed on HF (it installs from requirements.txt)
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# macOS
+.DS_Store
+
+# Gradio temp files
+flagged/
+gradio_cached_examples/
+
+# Dev tooling
+*.sh
+nohup.out
