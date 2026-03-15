@@ -68,7 +68,7 @@ with gr.Blocks(title="AI Interview Coach") as demo:
 
     progress_md = gr.Markdown("", visible=False)
 
-    chatbot = gr.Chatbot(height=500, label="Interview", visible=False, type="messages")
+    chatbot = gr.Chatbot(height=500, label="Interview", visible=False)
 
     with gr.Group(visible=False) as answer_panel:
         answer_input = gr.Textbox(label="Your Answer", lines=4, placeholder="Type your answer here…")
@@ -190,5 +190,5 @@ with gr.Blocks(title="AI Interview Coach") as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", show_api=False)
+    demo.launch(server_name="0.0.0.0")
 
