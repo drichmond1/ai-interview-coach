@@ -9,7 +9,7 @@
 
 set -e
 
-HF_USERNAME=${1:-"drichmond1"}
+HF_USERNAME=${1:-"showmerich"}
 SPACE_NAME="ai-interview-coach"
 
 echo "🚀 Deploying AI Interview Coach to HuggingFace Spaces..."
