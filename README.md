@@ -1,5 +1,5 @@
 ---
-title: AI Interview Coach
+title: ai-interview-coach
 emoji: 🤖
 colorFrom: blue
 colorTo: indigo
