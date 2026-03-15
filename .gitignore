@@ -1,0 +1,21 @@
+# Environment secrets — never commit these
+.env
+*.env
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# macOS
+.DS_Store
+
+# Gradio temp files
+flagged/
+gradio_cached_examples/
