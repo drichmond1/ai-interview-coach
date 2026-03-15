@@ -1,10 +1,22 @@
 import os
+
+# Patch removed HfFolder for gradio 4.44.1 compatibility with huggingface_hub >= 0.23
+try:
+    from huggingface_hub import HfFolder  # noqa: F401 — just test the import
+except ImportError:
+    import huggingface_hub as _hfh
+    class _HfFolder:
+        @staticmethod
+        def get_token():
+            return _hfh.utils.get_token() if hasattr(_hfh.utils, "get_token") else None
+    _hfh.HfFolder = _HfFolder
+
 import gradio as gr
 from dotenv import load_dotenv
 
 load_dotenv()  # Load .env if present
 
-# Patch gradio_client schema introspection bug (boolean 'description' fields crash on Python 3.9 + gradio 4.44)
+# Patch gradio_client schema introspection bug (boolean 'description' fields crash on older gradio_client)
 import gradio_client.utils as _gcu
 _orig_j2p = _gcu._json_schema_to_python_type
 def _safe_j2p(schema, defs):
