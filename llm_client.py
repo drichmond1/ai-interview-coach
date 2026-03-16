@@ -9,7 +9,7 @@ from gtts import gTTS
 logger = logging.getLogger(__name__)
 
 PROVIDERS = {
-    "groq": "groq/openai/gpt-oss-120b",
+    "groq": "groq/llama-3.3-70b-versatile",
     "openai": "gpt-4o",
     "anthropic": "claude-3-5-sonnet-20241022",
     "gemini": "gemini/gemini-1.5-flash",
